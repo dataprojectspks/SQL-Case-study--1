@@ -1,0 +1,141 @@
+ALTER TABLE [dbo].[Transactions]
+ALTER COLUMN [total_amt] int; 
+
+--Data Prep
+--Question 1 1.	What is the total number of rows in each of the 3 tables in the database?
+SELECT count(Gender) from [dbo].[Customer]   union all
+sELECT count([prod_cat_code]) from  [dbo].[prod_cat_info] union all
+sELECT count([transaction_id]) from  [dbo].[Transactions]
+
+
+
+--Q2 What is the total number of transactions that have a return?
+SELECT count(Qty) from [dbo].[Transactions] where [Qty] <0
+
+--Q3 As you would have noticed, the dates provided across the datasets are not in a correct format. As first steps, pls convert the date variables into valid date formats before proceeding ahead.
+--SELECT CONVERT(nvarchar,[tran_date],111) from [dbo].[Transactions]
+ 
+ ALTER TABLE [dbo].[Transactions]
+ ALTER COLUMN [tran_date] date NOT NULL 
+ ALTER TABLE [dbo].[Customer]
+ ALTER COLUMN [DOB] date NOT NULL
+
+SELECT * FROM [dbo].[Transactions]
+SELECT * FROM [dbo].[Customer]
+SELECT * FROM [dbo].[prod_cat_info]
+ 
+--Q4 What is the time range of the transaction data available for analysis? Show the output in number of days, months and years simultaneously in different columns.
+SELECT dateadd(month, 5,
+max([tran_date])),min([tran_date])
+--DATEPART(MONTH, [tran_date]) as tran_MONTH
+FROM
+[dbo].[Transactions]
+--DATEDIFF(DAY,date,GETDATE())<=30
+
+--Q5 5.	Which product category does the sub-category “DIY” belong to?
+
+SELECT [prod_cat], [prod_subcat] FROM [dbo].[prod_cat_info]
+WHERE [prod_subcat]= 'DIY'
+
+--DATA ANALYSIS
+--1.	Which channel is most frequently used for transactions?
+
+SELECT TOP 1 [Store_type], COUNT ([Store_type])  FROM [dbo].[Transactions] GROUP BY [Store_type] 
+ORDER BY [Store_type] desc
+
+--2	What is the count of Male and Female customers in the database?
+SELECT TOP 2 [Gender],COUNT ([Gender]) FROM [dbo].[Customer] WHERE [Gender] IS NOT NULL
+GROUP BY [Gender] ORDER BY COUNT ([Gender]) DESC
+
+--3 3.	From which city do we have the maximum number of customers and how many?
+
+SELECT TOP 1 COUNT([customer_Id]) AS 'Number of customers', [city_code] FROM [dbo].[Customer] GROUP BY [city_code]
+ORDER BY COUNT([customer_Id]) DESC
+
+--4.4.	How many sub-categories are there under the Books category?
+
+select count([prod_subcat]), [prod_cat] from [dbo].[prod_cat_info] where [prod_cat] = 'Books'
+group by [prod_cat]
+
+--5 5.	What is the maximum quantity of products ever ordered?
+
+select max([Qty]) as 'max qty' from [dbo].[Transactions]
+
+--6. 6.	What is the net total revenue generated in categories Electronics and Books?
+
+select sum([total_amt]) as 'tot rev', [dbo].[prod_cat_info].prod_cat from [dbo].[Transactions]
+left join [dbo].[prod_cat_info]
+on [dbo].[Transactions].prod_cat_code = [dbo].[prod_cat_info].prod_cat_code
+group by [dbo].[prod_cat_info].prod_cat
+
+--7. 7.	How many customers have >10 transactions with us, excluding returns?
+--Ans: 6 customers
+
+select [cust_id], count([cust_id]) as 'number of customers',sum(convert(int,convert(numeric,[dbo].[Transactions].[Qty])))
+ as 'total qty', count([transaction_id]) as 'number of trans' from [dbo].[Transactions] 
+ where cast([dbo].[Transactions].[Qty] as int) > 0 
+ group by [cust_id]
+ having count([cust_id]) > 10
+
+ --8.What is the combined revenue earned from the “Electronics” & “Clothing” categories, from “Flagship stores”?
+
+ --select * from [dbo].[prod_cat_info]
+ select sum(convert(int,[total_amt])) as 'total revenue', 
+ [Store_type]
+ from [dbo].[Transactions]
+ where [Store_type] = 'Flagship store' AND [prod_cat_code] IN (1, 3)
+ group by [Store_type]
+
+--9.What is the total revenue generated from “Male” customers in “Electronics” category? Output should display total revenue by prod sub-cat.
+select [dbo].[prod_cat_info].[prod_subcat],sum([dbo].[Transactions].[total_amt]) as 'Total Revenue'
+FROM [dbo].[Transactions] LEFT JOIN [dbo].[Customer] ON 
+[dbo].[Transactions].[cust_id] = [dbo].[Customer].[customer_Id] left join [dbo].[prod_cat_info]
+on [dbo].[Transactions].[prod_cat_code] = [dbo].[prod_cat_info].[prod_cat_code] 
+WHERE [dbo].[Customer].[Gender] = 'M' and [dbo].[prod_cat_info].[prod_cat] = 'Electronics'
+GROUP BY [dbo].[prod_cat_info].[prod_subcat]
+
+--10.What is percentage of sales and returns by product sub category; display only top 5 sub categories in terms of sales?
+
+select top 5 [dbo].[prod_cat_info].[prod_subcat], round(
+sum(case when [dbo].[Transactions].[total_amt] < 0 then 
+ -[dbo].[Transactions].[total_amt] else 0 end),1,0)*100 /round(sum([dbo].[Transactions].[total_amt]),1,0)as 'Total Returns %'
+ , round(sum(case when [dbo].[Transactions].[total_amt] > 0 then 
+ [dbo].[Transactions].[total_amt] else 0 end),1,0)*100/round(sum([dbo].[Transactions].[total_amt]),1,0) as 'Total Sales %'
+from [dbo].[Transactions] left join [dbo].[prod_cat_info] 
+on [dbo].[Transactions].[prod_cat_code] = [dbo].[prod_cat_info].[prod_cat_code]
+group by [dbo].[prod_cat_info].[prod_subcat]
+
+--11.For all customers aged between 25 to 35 years find what is the net total revenue generated by 
+--these consumers in last 30 days of transactions from max transaction date available in the data?
+
+select sum([dbo].[Transactions].[total_amt]) from [dbo].[Transactions]
+left join [dbo].[Customer] on [dbo].[Transactions].[cust_id]=[dbo].[Customer].[customer_Id]
+where [dbo].[Customer].[DOB] < dateadd(DAY, -30,max([dbo].[Transactions].[tran_date]))
+
+
+
+--12.	Which product category has seen the max value of returns in the last 3 months of transactions?
+select [dbo].[prod_cat_info].[prod_cat], 
+max(case when [dbo].[Transactions].[total_amt] < 0 then -[dbo].[Transactions].[total_amt] else 0 end) 
+from [dbo].[Transactions] left join [dbo].[prod_cat_info] on [dbo].[Transactions].[prod_cat_code] = [dbo].[prod_cat_info].[prod_cat_code]
+where [dbo].[Transactions].[tran_date] < dateadd(month, -3,getdate())
+group by [dbo].[prod_cat_info].[prod_cat]
+
+--13.	Which store-type sells the maximum products; by value of sales amount and by quantity sold?
+select [Store_type],sum([dbo].[Transactions].[total_amt]) as 'total sales',sum([dbo].[Transactions].[Qty]) as 'total qty' from [dbo].[Transactions]
+group by [Store_type]
+
+
+--14.	What are the categories for which average revenue is above the overall average
+select [dbo].[prod_cat_info].[prod_cat], avg([dbo].[Transactions].[total_amt])
+from [dbo].[Transactions] left join [dbo].[prod_cat_info] on [dbo].[Transactions].[prod_cat_code]=[dbo].[prod_cat_info].[prod_cat_code]
+where [dbo].[Transactions].[total_amt] > avg([dbo].[Transactions].[total_amt])
+group by [dbo].[prod_cat_info].[prod_cat]
+
+
+--15.	Find the average and total revenue by each subcategory for the categories 
+--which are among top 5 categories in terms of quantity sold.
+select top 5 [dbo].[prod_cat_info].[prod_cat],sum([dbo].[Transactions].[Qty]) as 'total qty',avg([dbo].[Transactions].[total_amt]) as 'avg rev',sum([dbo].[Transactions].[total_amt]) as 'total rev'
+from [dbo].[Transactions] left join [dbo].[prod_cat_info] on [dbo].[Transactions].[prod_cat_code]=[dbo].[prod_cat_info].[prod_cat_code]
+group by [dbo].[prod_cat_info].[prod_cat]
+order by sum([dbo].[Transactions].[Qty]) desc
